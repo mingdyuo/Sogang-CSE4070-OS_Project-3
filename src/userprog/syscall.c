@@ -48,8 +48,8 @@ const int args[] = {
 	2, // seek
 	1, // tell
 	1, // close
-	1, //fibo
-	4  //max_of_four_int
+	1, // fibo
+	4  // max_of_four_int
 };
 
 static void
@@ -86,8 +86,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 		  }
 		case SYS_CREATE:
 		  {
-			  const char* filename = (const char*)*(uint32_t *)(f->esp+4);
-			  unsigned size = (unsigned)*(uint32_t *)(f->esp+8); 
+			  const char* filename = (const char*)*(uint32_t *)(f->esp+16);
+			  unsigned size = (unsigned)*(uint32_t *)(f->esp+20); 
 			  f->eax = (uint32_t) sys_create(filename, size);
 			  break;
 		  }
@@ -111,6 +111,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 		  }
 		case SYS_READ:
 		  {
+			  for(int i=0;i<3;i++){
+				if(!is_valid_addr(f->esp + 20 + (4 * i)))
+					sys_exit(-1);
+			  }
 			  int fd = (int)*(uint32_t*)(f->esp+20);
 			  void* buffer = (void*)*(uint32_t *)(f->esp + 24);
 			  unsigned size = (unsigned)*((uint32_t*)(f->esp + 28));
@@ -119,6 +123,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 		  }
 		case SYS_WRITE:
 		  {
+			  for(int i=0;i<3;i++){
+				if(!is_valid_addr(f->esp + 20 + (4 * i)))
+					sys_exit(-1);
+			  }
 			int fd = (int)*(uint32_t*)(f->esp+20);
 			void* buffer = (void*)*(uint32_t *)(f->esp + 24);
 			unsigned size = (unsigned)*((uint32_t*)(f->esp + 28));
@@ -133,7 +141,11 @@ syscall_handler (struct intr_frame *f UNUSED)
 		  	  break;
 		  }
 		case SYS_TELL:
-		  break;
+		  {
+			  int fd = (int)*(uint32_t*)(f->esp + 4);
+			  f->eax = (uint32_t)sys_tell(fd);
+			  break;
+		  }
 		case SYS_CLOSE:
 		  {
 			  int fd = *(uint32_t*)(f->esp + 4);
@@ -211,6 +223,7 @@ sys_close (int fd)
 	if(file != NULL){
 		(t->fd_table)[fd] = NULL;
 		file_close(file);
+		t->fd_using --;
 	}
 }
 
@@ -247,7 +260,16 @@ sys_seek(int fd, unsigned position)
 unsigned 
 sys_tell(int fd)
 {
-  return 0;
+	if(fd < 3 || fd >= 131)
+		sys_exit(-1);
+
+	struct thread* t = thread_current();
+	struct file* file = (t->fd_table)[fd];
+
+	if(file == NULL)
+		sys_exit(-1);
+
+    return file_tell(file);
 }
 
 
@@ -281,8 +303,10 @@ sys_read(int fd, void* buffer, unsigned size)
 		}
 		return i;
 	}
+	
 	if(fd < 3 || fd >= 131)
 		sys_exit(-1);
+
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 
@@ -295,12 +319,20 @@ sys_read(int fd, void* buffer, unsigned size)
 void
 sys_exit(int exitcode)
 {
-	char* file_name = thread_current ()->name;
+	struct thread* t = thread_current();
+	char* file_name = t->name;
 	char *token, *next;
 	
 	token = strtok_r(file_name, " ", &next);
-	thread_current()->exit_status = exitcode;
+	t->exit_status = exitcode;
 	printf("%s: exit(%d)\n", token, exitcode);
+
+	for(int i=3;i<131;i++){
+		if((t->fd_table)[i] != NULL){
+			file_close((t->fd_table)[i]);
+		}
+	}
+
 	thread_exit();
 }
 

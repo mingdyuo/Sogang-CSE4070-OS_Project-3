@@ -472,7 +472,8 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&(t->mem_lock), 0);
   list_init(&(t->child));
   list_push_back(&(running_thread()->child), &(t->child_elem));
-
+	
+  for(int i=0;i<131;i++) (t->fd_table)[i] = NULL;
   t->fd_using = 0;
 #endif
 
