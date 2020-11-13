@@ -1,0 +1,17 @@
+AUTHORS
+doc/
+LICENSE
+Makefile
+submit.sh
+tests/
+
+.directory
+.nfs*
+*.slo
+*.lo
+*.o
+*.obj
+*.a
+*.so*
+
+.Trash-*
