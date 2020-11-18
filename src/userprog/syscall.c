@@ -111,10 +111,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 		  }
 		case SYS_READ:
 		  {
-			  for(int i=0;i<3;i++){
-				if(!is_valid_addr(f->esp + 20 + (4 * i)))
-					sys_exit(-1);
-			  }
 			  int fd = (int)*(uint32_t*)(f->esp+20);
 			  void* buffer = (void*)*(uint32_t *)(f->esp + 24);
 			  unsigned size = (unsigned)*((uint32_t*)(f->esp + 28));
@@ -202,12 +198,12 @@ sys_open (const char *file)
 		return -1;
 
 	struct thread* t = thread_current();
-	if (t->fd_using > 128) // file descriptor all using
-		return -1;
+	if(!strcmp(t->name, file))
+		file_deny_write(openedFile);
+
 	for(int i = 3; i < 128; i++){
 		if(!(t->fd_table[i])){
 			t->fd_table[i] = openedFile;
-			t->fd_using++;
 			return i;
 		}
 	}
@@ -304,9 +300,9 @@ sys_read(int fd, void* buffer, unsigned size)
 		return i;
 	}
 	
-	if(fd < 3 || fd >= 131)
+	if(fd < 3 || fd >= 131 || !is_valid_addr(buffer))
 		sys_exit(-1);
-
+	
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 
