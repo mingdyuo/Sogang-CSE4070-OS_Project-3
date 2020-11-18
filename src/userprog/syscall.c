@@ -192,7 +192,8 @@ int
 sys_open (const char *file)
 {
 	if(file == NULL)
-		return -1;
+		sys_exit(-1);
+
 	struct file* openedFile = filesys_open(file);
 	if(openedFile == NULL) // failed to open file
 		return -1;
@@ -214,6 +215,9 @@ sys_open (const char *file)
 void 
 sys_close (int fd)
 {
+	if(fd < 3 || fd >= 131) 
+		return;
+
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 	if(file != NULL){
@@ -227,7 +231,7 @@ int
 sys_filesize (int fd)
 {
 	if(fd < 3 || fd >= 131) 
-		sys_exit(-1);
+		return -1;
 
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
@@ -278,13 +282,15 @@ sys_write(int fd, const void *buffer, unsigned size){
 		return size;
 	}
 	if(fd < 3 || fd >= 131)
-		sys_exit(-1);
+		return -1;
 
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 
 	if(file == NULL)
 		sys_exit(-1);
+	if(file->deny_write)
+		file_deny_write(file);
 
 	return file_write(file, buffer, size);
 }
@@ -300,7 +306,10 @@ sys_read(int fd, void* buffer, unsigned size)
 		return i;
 	}
 	
-	if(fd < 3 || fd >= 131 || !is_valid_addr(buffer))
+	if(fd < 3 || fd >= 131)
+		return -1;
+
+	if(!is_valid_addr(buffer))
 		sys_exit(-1);
 	
 	struct thread* t = thread_current();
