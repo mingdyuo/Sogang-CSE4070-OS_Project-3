@@ -28,6 +28,11 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* FOR PROJECT 3 ------------------------------------------
+   List of processes which is in BLOCKED state by timer_sleep,
+   that is checked every ticks in timer_interrupt() if it needs to be woken up */
+static struct list sleeping_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,6 +97,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleeping_list); // Newly added
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();

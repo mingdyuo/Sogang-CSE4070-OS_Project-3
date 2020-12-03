@@ -13,5 +13,6 @@ tests/
 *.obj
 *.a
 *.so*
+*.docx
 
 .Trash-*

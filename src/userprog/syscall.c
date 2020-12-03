@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/synch.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
@@ -15,6 +16,7 @@
 #include "filesys/file.h"
 
 static void syscall_handler (struct intr_frame *);
+struct lock filesys_lock;
 
 bool 
 is_valid_addr(const void *vaddr)
@@ -31,6 +33,7 @@ is_valid_addr(const void *vaddr)
 void
 syscall_init (void) 
 {
+  lock_init(&filesys_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -111,25 +114,21 @@ syscall_handler (struct intr_frame *f UNUSED)
 		  }
 		case SYS_READ:
 		  {
-			  for(int i=0;i<3;i++){
-				if(!is_valid_addr(f->esp + 20 + (4 * i)))
-					sys_exit(-1);
-			  }
 			  int fd = (int)*(uint32_t*)(f->esp+20);
 			  void* buffer = (void*)*(uint32_t *)(f->esp + 24);
 			  unsigned size = (unsigned)*((uint32_t*)(f->esp + 28));
+			  if(!is_valid_addr(buffer))
+				  sys_exit(-1);
 			  f->eax = (uint32_t)sys_read(fd, buffer, size);
 			  break;
 		  }
 		case SYS_WRITE:
 		  {
-			  for(int i=0;i<3;i++){
-				if(!is_valid_addr(f->esp + 20 + (4 * i)))
-					sys_exit(-1);
-			  }
 			int fd = (int)*(uint32_t*)(f->esp+20);
 			void* buffer = (void*)*(uint32_t *)(f->esp + 24);
 			unsigned size = (unsigned)*((uint32_t*)(f->esp + 28));
+		    if(!is_valid_addr(buffer))
+			    sys_exit(-1);
 			f->eax = (uint32_t)sys_write(fd, buffer, size);
 		    break;
 		  }
@@ -196,28 +195,35 @@ int
 sys_open (const char *file)
 {
 	if(file == NULL)
-		return -1;
-	struct file* openedFile = filesys_open(file);
-	if(openedFile == NULL) // failed to open file
-		return -1;
+		sys_exit(-1);
 
-	struct thread* t = thread_current();
-	if (t->fd_using > 128) // file descriptor all using
-		return -1;
-	for(int i = 3; i < 128; i++){
-		if(!(t->fd_table[i])){
-			t->fd_table[i] = openedFile;
-			t->fd_using++;
-			return i;
+	int result = -1;
+	lock_acquire(&filesys_lock);
+	struct file* openedFile = filesys_open(file);
+
+	if(openedFile != NULL) {
+		struct thread* t = thread_current();
+		if(!strcmp(t->name, file))
+			file_deny_write(openedFile);
+		for(int i = 3; i < 128; i++){
+			if(!(t->fd_table[i])){
+				t->fd_table[i] = openedFile;
+				result = i;
+				break;
+			}
 		}
 	}
-	/* not found */
-	return -1;
+	lock_release(&filesys_lock);
+	return result;
 }
 
 void 
 sys_close (int fd)
 {
+	/*
+	if(fd < 3 || fd >= 131) 
+		return;
+*/
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 	if(file != NULL){
@@ -230,9 +236,10 @@ sys_close (int fd)
 int 
 sys_filesize (int fd)
 {
+	/*
 	if(fd < 3 || fd >= 131) 
-		sys_exit(-1);
-
+		return -1;
+*/
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 
@@ -245,9 +252,10 @@ sys_filesize (int fd)
 void 
 sys_seek(int fd, unsigned position)
 {
+	/*
 	if(fd < 3 || fd >= 131) 
 		sys_exit(-1);
-
+*/
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 
@@ -260,9 +268,10 @@ sys_seek(int fd, unsigned position)
 unsigned 
 sys_tell(int fd)
 {
+	/*
 	if(fd < 3 || fd >= 131)
 		sys_exit(-1);
-
+*/
 	struct thread* t = thread_current();
 	struct file* file = (t->fd_table)[fd];
 
@@ -276,44 +285,63 @@ sys_tell(int fd)
 /* ============ Below is for Project 1 & 2 ============ */
 
 int
-sys_write(int fd, const void *buffer, unsigned size){
+sys_write(int fd, const void *buffer, unsigned size)
+{
+
+	int result;
+
+	lock_acquire(&filesys_lock);
 	if(fd == 1){
 		putbuf(buffer, size);
-		return size;
+		result = size;
 	}
-	if(fd < 3 || fd >= 131)
-		sys_exit(-1);
+	else if(fd > 2 && fd < 131) {
+		struct thread* t = thread_current();
+		struct file* file = (t->fd_table)[fd];
 
-	struct thread* t = thread_current();
-	struct file* file = (t->fd_table)[fd];
+		if(file == NULL){
+			lock_release(&filesys_lock);
+			sys_exit(-1);
+		}
+		if(file->deny_write)
+			file_deny_write(file);
+		result = file_write(file, buffer, size);
 
-	if(file == NULL)
-		sys_exit(-1);
+	}
+	else
+		result = -1;
+	lock_release(&filesys_lock);
 
-	return file_write(file, buffer, size);
+	return result;
 }
 
 int
 sys_read(int fd, void* buffer, unsigned size)
 {
+
+	int result;
+	lock_acquire(&filesys_lock);
 	if(fd == 0){
 		int i;
 		for(i=0;i<(int)size;i++){
 			if(input_getc() == '\0') break;
 		}
-		return i;
+		result = i;
 	}
-	
-	if(fd < 3 || fd >= 131)
-		sys_exit(-1);
+	else if(fd > 2 && fd < 131) {
+		struct thread* t = thread_current();
+		struct file* file = (t->fd_table)[fd];
+		if(file == NULL){
+			lock_release(&filesys_lock);
+			sys_exit(-1);
+		}
+		result = file_read(file, buffer, size);
+	}
+	else
+		result = -1;
+	lock_release(&filesys_lock);
 
-	struct thread* t = thread_current();
-	struct file* file = (t->fd_table)[fd];
-
-	if(file == NULL)
-		sys_exit(-1);
-
-	return file_read(file, buffer, size);
+	return result;
 }
 
 void

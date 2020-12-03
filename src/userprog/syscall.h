@@ -2,6 +2,14 @@
 #define USERPROG_SYSCALL_H
 
 #include "lib/user/syscall.h"
+#include "filesys/off_t.h"
+
+struct file 
+  {
+    struct inode *inode;        /* File's inode. */
+    off_t pos;                  /* Current position. */
+    bool deny_write;            /* Has file_deny_write() been called? */
+  };
 
 /* For Project 1 */
 void syscall_init (void);
