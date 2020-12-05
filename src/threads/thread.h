@@ -6,6 +6,11 @@
 #include <stdint.h>
 #include "threads/synch.h"
 
+#ifndef USERPROG
+/* Project #3 */
+extern bool thread_prior_aging;
+#endif
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -79,7 +84,7 @@ typedef int tid_t;
    the run queue (thread.c), or it can be an element in a
    semaphore wait list (synch.c).  It can be used these two ways
    only because they are mutually exclusive: only a thread in the
-   ready state is on the run queue, whereas only a thread in the
+   ready state is on the runqueue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
 struct thread
   {
@@ -93,6 +98,9 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+	/* For Project 3 */
+	int64_t ticks;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -111,6 +119,7 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -135,6 +144,12 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+
+/* For project 3 */
+void thread_sleep (int64_t ticks);
+void thread_wakeup (int64_t ticks);
+bool value_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);

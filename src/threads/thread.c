@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -59,6 +60,11 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+#ifndef USERPROG
+/* Project #3 */
+bool thread_prior_aging;
+#endif
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -97,7 +103,8 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  list_init (&sleeping_list); // Newly added
+  /* for Project 3*/
+  list_init (&sleeping_list); 
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -114,6 +121,7 @@ thread_start (void)
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
+  /* Project 3 : Priority default vaule is PRI_DEFAULT */
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 
   /* Start preemptive thread scheduling. */
@@ -143,6 +151,13 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+#ifndef USERPROG
+  /* Project #3 */
+  // thread_wakeup();
+  if(thread_prior_aging == true)
+	  thread_aging();
+#endif
 }
 
 /* Prints thread statistics. */
@@ -305,7 +320,7 @@ thread_exit (void)
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void
-thread_yield (void) 
+thread_yield () 
 {
   struct thread *cur = thread_current ();
   enum intr_level old_level;
@@ -315,9 +330,61 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) 
     list_push_back (&ready_list, &cur->elem);
+  
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
+}
+
+/* Project 3 : Add sleeping thread into sleeping queue and yield CPU */
+void
+thread_sleep (int64_t ticks)
+{
+  struct thread *cur = thread_current ();
+  enum intr_level old_level;
+  
+  ASSERT (!intr_context ());
+
+  old_level = intr_disable ();
+  if (cur != idle_thread) {
+	  cur->ticks = ticks;
+	  list_insert_ordered (&sleeping_list, &cur->elem,
+			value_less, NULL);
+  }
+
+  cur->status = THREAD_BLOCKED;
+  schedule ();
+  intr_set_level (old_level);
+}
+
+/* Project 3 : Returns true if ticks A is less than ticks B, false
+   otherwise. */
+bool
+value_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->ticks < b->ticks;
+}
+
+/* Project 3 : Wake thread up when timer is expirerd */
+void
+thread_wakeup (int64_t ticks)
+{
+	if (list_empty(&sleeping_list)) 
+		return;
+
+	struct list_elem* e = list_front(&sleeping_list);
+	while(ticks >= (list_entry(e, struct thread, elem))->ticks)
+	{
+   		list_remove (e);
+		thread_unblock(list_entry(e, struct thread, elem));
+		if(list_empty(&sleeping_list))
+			break;
+		e = list_front(&sleeping_list);
+	}
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -471,7 +538,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
 
-  old_level = intr_disable (); // 이게 머징
+  old_level = intr_disable (); 
   list_push_back (&all_list, &t->allelem);
 #ifdef USERPROG
   sema_init(&(t->child_lock), 0);

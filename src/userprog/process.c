@@ -30,14 +30,11 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-//		printf("DEBUG: execute function \n");
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
- // 		printf("DEBUG: fn copy\n");
   if (fn_copy == NULL)
     return TID_ERROR;
-//  		printf("DEBUG: fncopy is not null\n");
   strlcpy (fn_copy, file_name, PGSIZE);
 	
   char cmd_name[256];
@@ -45,19 +42,14 @@ process_execute (const char *file_name)
   int i;
   for(i=0;cmd_name[i]!='\0' && cmd_name[i] != ' ';i++);
   cmd_name[i] = '\0';
-//		printf("DEBUG: cmd name is [%s]\n", cmd_name);
   if(!filesys_open(cmd_name))
 	  return -1;
   
-//		printf("DEBUG: filesys open no error\n");
-
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy); 
-//	printf("DEBUG: tid is error\n");
   }	
- // return process_wait(tid);
   return tid;
 }
 
@@ -69,14 +61,12 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-//	printf("DEBUG: [%s]start process\n", file_name_);
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-//	printf("DEBUG: after load success = [%d]\n", success);
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
