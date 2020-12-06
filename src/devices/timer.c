@@ -95,7 +95,7 @@ timer_sleep (int64_t ticks)
 
   /* Project 3
 	if timer isn't expired yet, make thread BLOCKED state */
-  if (timer_elapsed (start) < ticks) {
+ if (timer_elapsed (start) < ticks) {
 	  thread_sleep(ticks + start);
   }
 }
@@ -175,7 +175,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_wakeup(ticks);
+  thread_wakeup();
   thread_tick ();
 }
 

@@ -147,9 +147,13 @@ void thread_yield (void);
 
 /* For project 3 */
 void thread_sleep (int64_t ticks);
-void thread_wakeup (int64_t ticks);
+void thread_wakeup (void);
 bool value_less (const struct list_elem *a_, const struct list_elem *b_,
             void *aux UNUSED);
+void thread_aging(void);
+bool priority_higher (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED);
+void thread_test_priority(void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
