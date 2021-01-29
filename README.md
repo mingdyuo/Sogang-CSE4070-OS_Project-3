@@ -6,7 +6,7 @@
 
 **문제 상황**
 
-`timer_sleep()` busy waiting 방식으로 run state, ready state를 반복적으로 돌면서 process를 sleep 시킨다. 따라서 매우 비효율적이다. 
+`timer_sleep()` 함수는 busy waiting 방식으로 process를 sleep 시키는데 이 방식은 run state, ready state를 반복적으로 돌게 한다. 따라서 매우 비효율적이다. 
 
 **비효율을 피하는 방법**
 
